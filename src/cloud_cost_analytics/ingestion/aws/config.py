@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import json
+import math
 import os
 import re
 from collections.abc import Mapping
@@ -13,6 +14,17 @@ IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,127}$")
 S3_URI_RE = re.compile(r"^s3://[a-z0-9][a-z0-9.-]{1,61}[a-z0-9](?:/[A-Za-z0-9._!$&'()*+,;=:@%/-]*)?$")
 VALID_METRICS = {"UnblendedCost", "AmortizedCost", "NetUnblendedCost", "NetAmortizedCost"}
 VALID_CUR_FORMATS = {"legacy_cur", "cur2"}
+
+INTEGER_LIMITS = {
+    "max_lookback_months": ("AWS_MAX_LOOKBACK_MONTHS", 1, 13),
+    "max_api_requests": ("AWS_MAX_API_REQUESTS", 1, 100),
+    "max_pages": ("AWS_MAX_PAGES", 1, 100),
+    "max_bytes_scanned": ("AWS_MAX_BYTES_SCANNED", 1, 5_000_000_000),
+    "resync_window_days": ("AWS_RESYNC_WINDOW_DAYS", 1, 366),
+    "poll_timeout_seconds": ("AWS_POLL_TIMEOUT_SECONDS", 1, 600),
+    "max_retry_attempts": ("AWS_MAX_RETRY_ATTEMPTS", 1, 4),
+}
+POLL_INTERVAL_LIMIT = ("AWS_POLL_INTERVAL_SECONDS", 0.0, 60.0)
 
 
 @dataclass(frozen=True)
@@ -39,6 +51,18 @@ class AwsConfig:
     tag_field_map: Mapping[str, str] = field(default_factory=lambda: {
         "team": "team", "environment": "environment", "env": "environment", "project": "project",
     })
+
+    def __post_init__(self) -> None:
+        """Enforce finite execution limits even for direct AwsConfig callers."""
+        for attribute, (setting, minimum, maximum) in INTEGER_LIMITS.items():
+            value = getattr(self, attribute)
+            if type(value) is not int or not minimum <= value <= maximum:
+                raise ConfigError(f"{setting} must be between {minimum} and {maximum}.")
+        setting, minimum, maximum = POLL_INTERVAL_LIMIT
+        value = self.poll_interval_seconds
+        if (isinstance(value, bool) or not isinstance(value, (int, float))
+                or not math.isfinite(value) or not minimum <= value <= maximum):
+            raise ConfigError(f"{setting} must be between {minimum:g} and {maximum:g}.")
 
     def require_enabled(self) -> None:
         if not self.enabled:
@@ -97,11 +121,11 @@ def load_aws_config(
         errors.append("AWS_INGESTION_ENABLED")
     enabled = raw_enabled in {"true", "1", "yes"}
 
-    def integer(key: str, default: int, minimum: int = 1) -> int:
+    def integer(key: str, default: int, minimum: int, maximum: int) -> int:
         raw = get(key, default)
         try:
             value = int(str(raw))
-            if value < minimum:
+            if not minimum <= value <= maximum:
                 raise ValueError
             return value
         except (TypeError, ValueError):
@@ -135,7 +159,9 @@ def load_aws_config(
         malformed_ratio = 0.05
     try:
         poll_interval = float(str(get("AWS_POLL_INTERVAL_SECONDS", 1.0)))
-        if poll_interval < 0:
+        interval_setting, interval_minimum, interval_maximum = POLL_INTERVAL_LIMIT
+        if (not math.isfinite(poll_interval)
+                or not interval_minimum <= poll_interval <= interval_maximum):
             raise ValueError
     except (TypeError, ValueError):
         errors.append("AWS_POLL_INTERVAL_SECONDS")
@@ -169,21 +195,20 @@ def load_aws_config(
         except (ValueError, TypeError, json.JSONDecodeError):
             errors.append("AWS_TAG_FIELD_MAP")
 
+    integer_settings = {
+        attribute: integer(setting, getattr(AwsConfig(), attribute), minimum, maximum)
+        for attribute, (setting, minimum, maximum) in INTEGER_LIMITS.items()
+    }
+
     if errors:
         raise ConfigError("Invalid setting(s): " + ", ".join(sorted(set(errors))))
     return AwsConfig(
         enabled=enabled, region=region, profile=profile, cost_metric=metric,
-        max_lookback_months=integer("AWS_MAX_LOOKBACK_MONTHS", 13),
-        max_api_requests=integer("AWS_MAX_API_REQUESTS", 100),
-        max_pages=integer("AWS_MAX_PAGES", 100),
-        max_bytes_scanned=integer("AWS_MAX_BYTES_SCANNED", 5_000_000_000),
+        **integer_settings,
         max_malformed_ratio=malformed_ratio,
-        resync_window_days=integer("AWS_RESYNC_WINDOW_DAYS", 90),
         cur_format=cur_format, athena_database=athena_database, athena_table=athena_table,
         athena_workgroup=athena_workgroup, athena_output_location=output_location,
-        poll_timeout_seconds=integer("AWS_POLL_TIMEOUT_SECONDS", 300),
         poll_interval_seconds=poll_interval,
-        max_retry_attempts=integer("AWS_MAX_RETRY_ATTEMPTS", 4),
         source_authority=authority, tag_field_map=tag_map,
     )
 

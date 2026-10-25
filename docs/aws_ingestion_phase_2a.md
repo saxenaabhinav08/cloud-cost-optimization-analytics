@@ -20,7 +20,7 @@ The source clients are explicit dependencies of `AwsIngestionPipeline`; nothing 
 
 ### Canonical record grain
 
-Each canonical record is keyed by SHA-256 over source, linked account, usage date, service, region, usage type, line-item type, currency, cost metric, and normalized tags. Amounts stay `Decimal` through parsing, aggregation, comparison, and SQL writes (`DECIMAL(24,8)`). Cost Explorer groupings are daily aggregates, not line items. Credits and refunds with negative values are retained. USD is the configured default metric currency; mixed-currency batches are rejected unless explicitly allowed, and the repository key keeps currencies separate.
+Each canonical record is keyed by SHA-256 over source, linked account, usage date, service, region, usage type, line-item type, currency, cost metric, and normalized tags. Amounts stay `Decimal` through parsing, aggregation, comparison, and SQL writes (`DECIMAL(24,8)`). Cost Explorer groupings are daily aggregates, not line items. Credits and refunds with negative values are retained. Currency is taken from the Cost Explorer response unit or CUR currency column; USD is the fallback when that field is absent. Mixed-currency batches are rejected unless explicitly allowed, and the repository key keeps currencies separate. No currency conversion is performed.
 
 The optional adapter projects canonical rows onto the current analytics DataFrame field names. It does not change the application's database reader, dashboard, or Ask AI table allowlist. To expose real-source data in the app, a later reviewed phase must explicitly integrate those surfaces.
 
@@ -37,17 +37,22 @@ All keys are optional while disabled. Environment variables take precedence over
 | `AWS_INGESTION_ENABLED` | `false`; explicit opt-in required before a client can be constructed |
 | `AWS_REGION`, `AWS_PROFILE` | `us-east-1`; optional standard local profile selection |
 | `AWS_COST_METRIC` | `UnblendedCost`; allowlisted cost metric |
-| `AWS_MAX_LOOKBACK_MONTHS` | `13`; maximum Cost Explorer lookback |
-| `AWS_MAX_API_REQUESTS`, `AWS_MAX_PAGES`, `AWS_MAX_RETRY_ATTEMPTS` | Hard bounds for calls, pagination, and transient retries |
-| `AWS_MAX_BYTES_SCANNED` | `5000000000`; maximum accepted Athena scan bytes per query |
-| `AWS_RESYNC_WINDOW_DAYS` | `90`; rolling source-period resync window |
+| `AWS_MAX_LOOKBACK_MONTHS` | Default `13`; accepted range `1–13` months |
+| `AWS_MAX_API_REQUESTS` | Default `100`; accepted range `1–100` API calls per client operation |
+| `AWS_MAX_PAGES` | Default `100`; accepted range `1–100` pages per result/query chunk |
+| `AWS_MAX_RETRY_ATTEMPTS` | Default `4`; accepted range `1–4` total attempts for a Cost Explorer request |
+| `AWS_MAX_BYTES_SCANNED` | Default `5000000000`; accepted range `1–5000000000` bytes. Athena checks this after the query succeeds and before fetching result pages; it cannot stop query execution or guarantee a maximum charge. |
+| `AWS_RESYNC_WINDOW_DAYS` | Default `90`; accepted range `1–366` days for the rolling source-period resync window |
 | `AWS_MAX_MALFORMED_RATIO` | `0.05`; reject the batch if malformed rows exceed this fraction |
 | `AWS_CUR_FORMAT` | `cur2`; `cur2` or `legacy_cur` column mapping |
 | `AWS_ATHENA_DATABASE`, `AWS_ATHENA_TABLE`, `AWS_ATHENA_WORKGROUP` | Required only for Athena; strict identifier validation |
 | `AWS_ATHENA_OUTPUT_LOCATION` | Required Athena results location, restricted to an S3 URI |
-| `AWS_POLL_TIMEOUT_SECONDS`, `AWS_POLL_INTERVAL_SECONDS` | Bounded Athena polling controls |
+| `AWS_POLL_TIMEOUT_SECONDS` | Default `300`; accepted range `1–600` seconds |
+| `AWS_POLL_INTERVAL_SECONDS` | Default `1`; accepted range `0–60` seconds |
 | `AWS_SOURCE_AUTHORITY` | `cur`; documents the preferred source where both exist |
 | `AWS_TAG_FIELD_MAP` | Optional JSON map from normalized source tag names to `team`, `environment`, or `project` |
+
+The configured retry count applies to Cost Explorer requests only. Cost Explorer retries throttling and HTTP 5xx responses; access-denied, authentication, and other failures are not retried by the application. Athena polling has no application-level retry loop. Each Athena query start receives a deterministic `ClientRequestToken` derived from its ingestion run, source month, and query so an SDK retry can identify the same start request.
 
 Install the optional client dependency only when preparing a sandbox environment:
 

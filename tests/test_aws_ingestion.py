@@ -4,6 +4,8 @@ from datetime import date
 from decimal import Decimal
 import logging
 import os
+from pathlib import Path
+import re
 import socket
 
 import pytest
@@ -18,7 +20,9 @@ from cloud_cost_analytics.ingestion.aws.errors import (
     ScanLimitExceededError,
 )
 from cloud_cost_analytics.ingestion.aws.normalize import normalize_records, to_analytics_frame
-from cloud_cost_analytics.ingestion.aws.pipeline import AwsIngestionPipeline, authoritative_records, select_resync_scopes
+from cloud_cost_analytics.ingestion.aws.pipeline import (
+    AwsIngestionPipeline, athena_client_request_token, authoritative_records, select_resync_scopes,
+)
 from cloud_cost_analytics.ingestion.aws.redact import RedactingFilter, redact_text
 from cloud_cost_analytics.ingestion.aws.repository import AwsRepository, create_aws_schema
 
@@ -59,6 +63,110 @@ def test_config_validation_reports_setting_names_not_values():
         load_aws_config({"AWS_INGESTION_ENABLED": "true", "AWS_ATHENA_DATABASE": "bad;value"}, {})
     assert "AWS_ATHENA_DATABASE" in str(error.value)
     assert "bad;value" not in str(error.value)
+
+
+def test_config_rejects_invalid_numeric_setting_instead_of_falling_back_to_default():
+    invalid_value = "not-a-number"
+    with pytest.raises(ConfigError) as error:
+        load_aws_config({"AWS_MAX_API_REQUESTS": invalid_value}, {})
+    assert "AWS_MAX_API_REQUESTS" in str(error.value)
+    assert invalid_value not in str(error.value)
+
+
+@pytest.mark.parametrize(("setting", "minimum", "maximum"), [
+    ("AWS_MAX_LOOKBACK_MONTHS", 1, 13),
+    ("AWS_MAX_API_REQUESTS", 1, 100),
+    ("AWS_MAX_PAGES", 1, 100),
+    ("AWS_MAX_RETRY_ATTEMPTS", 1, 4),
+    ("AWS_MAX_BYTES_SCANNED", 1, 5_000_000_000),
+    ("AWS_RESYNC_WINDOW_DAYS", 1, 366),
+    ("AWS_POLL_TIMEOUT_SECONDS", 1, 600),
+])
+@pytest.mark.parametrize("invalid_kind", ["malformed", "below", "above"])
+def test_integer_execution_settings_reject_invalid_and_out_of_range_values(
+    setting, minimum, maximum, invalid_kind
+):
+    invalid_value = {
+        "malformed": "not-a-number",
+        "below": str(minimum - 1),
+        "above": str(maximum + 1),
+    }[invalid_kind]
+    with pytest.raises(ConfigError) as error:
+        load_aws_config({setting: invalid_value}, {})
+    assert setting in str(error.value)
+    assert invalid_value not in str(error.value)
+
+
+@pytest.mark.parametrize("invalid_value", ["not-a-number", "-0.1", "60.1"])
+def test_poll_interval_rejects_malformed_below_and_above_range_values(invalid_value):
+    with pytest.raises(ConfigError) as error:
+        load_aws_config({"AWS_POLL_INTERVAL_SECONDS": invalid_value}, {})
+    assert "AWS_POLL_INTERVAL_SECONDS" in str(error.value)
+    assert invalid_value not in str(error.value)
+
+
+@pytest.mark.parametrize(("attribute", "invalid_value", "setting"), [
+    ("max_lookback_months", 14, "AWS_MAX_LOOKBACK_MONTHS"),
+    ("max_api_requests", 101, "AWS_MAX_API_REQUESTS"),
+    ("max_pages", 101, "AWS_MAX_PAGES"),
+    ("max_retry_attempts", 5, "AWS_MAX_RETRY_ATTEMPTS"),
+    ("max_bytes_scanned", 5_000_000_001, "AWS_MAX_BYTES_SCANNED"),
+    ("resync_window_days", 367, "AWS_RESYNC_WINDOW_DAYS"),
+    ("poll_timeout_seconds", 601, "AWS_POLL_TIMEOUT_SECONDS"),
+])
+def test_direct_aws_config_construction_enforces_execution_caps(attribute, invalid_value, setting):
+    with pytest.raises(ConfigError) as error:
+        AwsConfig(enabled=True, **{attribute: invalid_value})
+    assert setting in str(error.value)
+    assert str(invalid_value) not in str(error.value)
+
+
+@pytest.mark.parametrize("invalid_value", [-0.1, 60.1, float("inf"), float("nan")])
+def test_direct_aws_config_construction_enforces_poll_interval_bounds(invalid_value):
+    with pytest.raises(ConfigError, match="AWS_POLL_INTERVAL_SECONDS"):
+        AwsConfig(enabled=True, poll_interval_seconds=invalid_value)
+
+
+def test_phase2a_migration_contains_only_additive_create_if_missing_statements():
+    migration_path = Path(__file__).resolve().parents[1] / "sql" / "migrations" / "20261025_aws_ingestion.sql"
+    migration = migration_path.read_text(encoding="utf-8")
+    sql_without_comments = re.sub(r"(?m)^\s*--.*$", "", migration)
+    statements = [statement.strip() for statement in sql_without_comments.split(";") if statement.strip()]
+
+    assert len(statements) == 5
+    tables = []
+    for statement in statements:
+        match = re.match(r"(?is)^CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+(aws_[a-z_]+)\b", statement)
+        assert match is not None
+        tables.append(match.group(1))
+    assert len(tables) == len(set(tables))
+
+
+def test_phase2a_migration_drop_order_covers_tables_and_respects_dependencies():
+    migration_path = Path(__file__).resolve().parents[1] / "sql" / "migrations" / "20261025_aws_ingestion.sql"
+    migration = migration_path.read_text(encoding="utf-8")
+    sql_without_comments = re.sub(r"(?m)^\s*--.*$", "", migration)
+    statements = [statement.strip() for statement in sql_without_comments.split(";") if statement.strip()]
+    created_tables = {
+        re.match(r"(?is)^CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+(aws_[a-z_]+)\b", statement).group(1)
+        for statement in statements
+    }
+    comment_text = "\n".join(
+        re.sub(r"^\s*--\s?", "", line)
+        for line in migration.splitlines()
+        if line.lstrip().startswith("--")
+    )
+    rollback = re.search(r"(?is)Drop in this order:\s*((?:aws_[a-z_]+\s*,\s*)*aws_[a-z_]+)", comment_text)
+    assert rollback is not None
+    drop_order = re.findall(r"aws_[a-z_]+", rollback.group(1))
+    assert len(drop_order) == len(set(drop_order))
+    assert set(drop_order) == created_tables
+
+    drop_positions = {table: index for index, table in enumerate(drop_order)}
+    for statement in statements:
+        table = re.match(r"(?is)^CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+(aws_[a-z_]+)\b", statement).group(1)
+        for dependency in re.findall(r"(?i)\bREFERENCES\s+(aws_[a-z_]+)", statement):
+            assert drop_positions[table] < drop_positions[dependency]
 
 
 def test_grouping_limit_and_account_are_enforced():
@@ -108,10 +216,11 @@ def test_cost_explorer_rejects_future_range_and_honors_request_budget():
     client = CostExplorerClient(enabled(), fake, clock_fn=lambda: date(2026, 1, 10))
     with pytest.raises(ValueError, match="future"):
         client.fetch(date(2026, 1, 1), date(2026, 1, 11))
-    client.config = enabled(max_api_requests=0)
-    # Config's public bounds are validated by the loader; the client still has a hard stop.
+    client.config = enabled(max_api_requests=1)
+    client.request_count = 1
+    # The client stops before issuing a request once its configured budget is spent.
     with pytest.raises(RequestBudgetExceededError):
-        client.fetch(date(2026, 1, 1), date(2026, 1, 2))
+        client._call()
 
 
 @pytest.mark.parametrize("failure", [AwsFakeError("ThrottlingException"), AwsFakeError("InternalError", 503)])
@@ -193,10 +302,37 @@ def test_athena_execution_polls_paginates_and_respects_dry_run():
     fake = FakeAthena()
     client = AthenaCurClient(enabled(), fake, sleep_fn=lambda _: None, clock_fn=lambda: 0)
     plan = client.plan(year=2026, month=1, start_date=date(2026, 1, 1), end_date=date(2026, 1, 31))
-    assert client.query(plan, dry_run=True) is plan
+    token = "a" * 64
+    assert client.query(plan, client_request_token=token, dry_run=True) is plan
     assert not hasattr(fake, "start")
-    assert client.query(plan) == [{"cost": "3.50"}, {"cost": "4.50"}]
+    assert client.query(plan, client_request_token=token) == [{"cost": "3.50"}, {"cost": "4.50"}]
     assert fake.polls == 2
+
+
+def test_athena_retried_start_reuses_deterministic_run_scope_token():
+    class RetryingStartFake(FakeAthena):
+        def __init__(self):
+            super().__init__()
+            self.start_attempts = []
+
+        def start_query_execution(self, **kwargs):
+            # Model a transport retry after an ambiguous first response. The SDK
+            # retries the same request arguments, including the idempotency token.
+            self.start_attempts.append(dict(kwargs))
+            self.start_attempts.append(dict(kwargs))
+            return {"QueryExecutionId": "q-retried"}
+
+    fake = RetryingStartFake()
+    config = enabled()
+    client = AthenaCurClient(config, fake, sleep_fn=lambda _: None, clock_fn=lambda: 0)
+    plan = client.plan(year=2026, month=1, start_date=date(2026, 1, 1), end_date=date(2026, 1, 2))
+    token = athena_client_request_token("run-stable", "cur", "2026-01", plan, config)
+
+    assert len(token) == 64
+    assert athena_client_request_token("run-stable", "cur", "2026-01", plan, config) == token
+    assert athena_client_request_token("run-stable", "cur", "2026-02", plan, config) != token
+    assert client.query(plan, client_request_token=token) == [{"cost": "3.50"}, {"cost": "4.50"}]
+    assert [attempt["ClientRequestToken"] for attempt in fake.start_attempts] == [token, token]
 
 
 def test_athena_scan_cap_stops_results_read():
@@ -206,7 +342,7 @@ def test_athena_scan_cap_stops_results_read():
     client = AthenaCurClient(enabled(max_bytes_scanned=100), fake, clock_fn=lambda: 0)
     plan = client.plan(year=2026, month=1, start_date=date(2026, 1, 1), end_date=date(2026, 1, 2))
     with pytest.raises(ScanLimitExceededError):
-        client.query(plan)
+        client.query(plan, client_request_token="b" * 64)
     assert fake.results == 0
 
 
@@ -215,7 +351,7 @@ def test_athena_enforces_shared_api_request_budget():
     client = AthenaCurClient(enabled(max_api_requests=1), fake, clock_fn=lambda: 0)
     plan = client.plan(year=2026, month=1, start_date=date(2026, 1, 1), end_date=date(2026, 1, 2))
     with pytest.raises(RequestBudgetExceededError):
-        client.query(plan)
+        client.query(plan, client_request_token="c" * 64)
     assert hasattr(fake, "start") and fake.polls == 0
 
 
@@ -224,7 +360,7 @@ def test_athena_stops_at_results_page_cap_before_another_request():
     client = AthenaCurClient(enabled(max_pages=1), fake, sleep_fn=lambda _: None, clock_fn=lambda: 0)
     plan = client.plan(year=2026, month=1, start_date=date(2026, 1, 1), end_date=date(2026, 1, 2))
     with pytest.raises(AwsRequestError, match="page cap"):
-        client.query(plan)
+        client.query(plan, client_request_token="d" * 64)
     assert fake.results == 1
 
 
@@ -349,3 +485,47 @@ def test_resync_selection_and_source_authority_avoid_double_counting():
     ce_record = normalize_records([source_row(source="cost_explorer")], source="cost_explorer").records[0]
     assert authoritative_records([cur_record, ce_record], preference="cur", cur_available_periods=["2026-01"]) == [cur_record]
     assert authoritative_records([cur_record, ce_record], preference="cur") == [ce_record]
+
+
+def test_multimonth_partial_failure_keeps_month_one_and_rerun_is_noop_for_it():
+    engine = create_engine("sqlite://")
+    create_aws_schema(engine)
+    repo = AwsRepository(engine)
+    original_replace_scope = repo.replace_scope
+    fail_february_once = {"pending": True}
+
+    def fail_february_transaction_once(source, scope, records, *, run_id, source_version=""):
+        if scope == "2026-02" and fail_february_once["pending"]:
+            fail_february_once["pending"] = False
+            return original_replace_scope(source, scope, records, run_id=run_id,
+                                          source_version=source_version, fail_after=1)
+        return original_replace_scope(source, scope, records, run_id=run_id,
+                                      source_version=source_version)
+
+    repo.replace_scope = fail_february_transaction_once
+
+    class TwoMonthReader:
+        request_count = 1
+
+        def fetch(self, start, end, **kwargs):
+            return [
+                source_row(usage_date="2026-01-03", cost="10.00"),
+                source_row(usage_date="2026-02-03", cost="20.00"),
+            ]
+
+    pipeline = AwsIngestionPipeline(enabled(), repo, cost_explorer=TwoMonthReader())
+    with pytest.raises(RuntimeError, match="transactional failure"):
+        pipeline.run(source="cost_explorer", start_date=date(2026, 1, 1),
+                     end_date=date(2026, 3, 1), run_id="multimonth-first")
+
+    assert len(repo.rows_for_scope("cost_explorer", "2026-01")) == 1
+    assert repo.rows_for_scope("cost_explorer", "2026-02") == []
+    assert repo.watermark("cost_explorer", "2026-01") is None
+    assert repo.watermark("cost_explorer", "2026-02") is None
+
+    rerun = pipeline.run(source="cost_explorer", start_date=date(2026, 1, 1),
+                         end_date=date(2026, 3, 1), run_id="multimonth-rerun")
+    assert rerun.rows_unchanged == 1
+    assert rerun.rows_inserted == 1
+    assert repo.watermark("cost_explorer", "2026-01")["last_successful_run_id"] == "multimonth-rerun"
+    assert repo.watermark("cost_explorer", "2026-02")["last_successful_run_id"] == "multimonth-rerun"

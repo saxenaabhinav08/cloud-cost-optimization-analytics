@@ -143,8 +143,11 @@ class AthenaCurClient:
             cur_format=self.config.cur_format, cost_metric=self.config.cost_metric,
             year=year, month=month, start_date=start_date, end_date=end_date, tag_key=tag_key)
 
-    def query(self, plan: AthenaQueryPlan, *, dry_run: bool = False) -> list[dict[str, object]] | AthenaQueryPlan:
+    def query(self, plan: AthenaQueryPlan, *, client_request_token: str,
+              dry_run: bool = False) -> list[dict[str, object]] | AthenaQueryPlan:
         """Execute a plan unless dry_run is requested; paginate rows and enforce scan cap."""
+        if not isinstance(client_request_token, str) or len(client_request_token) < 32:
+            raise ValueError("client_request_token must contain at least 32 characters")
         if dry_run:
             return plan
         self.config.require_athena()
@@ -154,6 +157,7 @@ class AthenaCurClient:
         try:
             started = self.client.start_query_execution(
                 QueryString=plan.sql,
+                ClientRequestToken=client_request_token,
                 ExecutionParameters=plan.execution_parameters(),
                 QueryExecutionContext={"Database": self.config.athena_database},
                 ResultConfiguration={"OutputLocation": self.config.athena_output_location},

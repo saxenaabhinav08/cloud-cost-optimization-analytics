@@ -4,11 +4,13 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
+import hashlib
+import json
 import math
 import uuid
 from typing import Iterable, Mapping
 
-from .athena_cur import AthenaCurClient
+from .athena_cur import AthenaCurClient, AthenaQueryPlan
 from .config import AwsConfig
 from .cost_explorer import CostExplorerClient
 from .errors import AwsIngestionDisabledError
@@ -88,6 +90,23 @@ def authoritative_records(records: Iterable[CanonicalBillingRecord], *, preferen
                 cur_available=(period in available), preference=preference,
             )
     return [record for record in rows if record.source == selected[record.usage_date.strftime("%Y-%m")]]
+
+
+def athena_client_request_token(run_id: str, source: str, scope: str,
+                                plan: AthenaQueryPlan, config: AwsConfig) -> str:
+    """Create a stable Athena idempotency token for one run, source month, and query."""
+    material = {
+        "run_id": run_id,
+        "source": source,
+        "scope": scope,
+        "query": plan.sql,
+        "parameters": plan.execution_parameters(),
+        "database": config.athena_database,
+        "workgroup": config.athena_workgroup,
+        "output_location": config.athena_output_location,
+    }
+    encoded = json.dumps(material, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
 
 
 class AwsIngestionPipeline:
@@ -179,7 +198,8 @@ class AwsIngestionPipeline:
                     month_end = date(year + (month == 12), month % 12 + 1, 1)
                     period_end = min(end_date, month_end)
                     plan = client.plan(year=year, month=month, start_date=period_start, end_date=period_end, tag_key=tag_key)
-                    batch = client.query(plan)
+                    token = athena_client_request_token(run_key, source, scope, plan, self.config)
+                    batch = client.query(plan, client_request_token=token)
                     raw_rows.extend(batch)
                     request_count = int(getattr(client, "request_count", request_count))
                     bytes_scanned += int(getattr(client, "last_bytes_scanned", 0))

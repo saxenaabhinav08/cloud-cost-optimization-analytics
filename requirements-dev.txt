@@ -1,0 +1,2 @@
+-r requirements.txt
+codespell>=2.4,<3

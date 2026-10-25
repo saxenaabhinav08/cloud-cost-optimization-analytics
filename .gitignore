@@ -1,0 +1,30 @@
+# Python bytecode and local environments
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+ENV/
+
+# Test and tool caches
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Editor and operating-system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local secrets (not required by this project)
+.env
+.env.*
+!.env.example
+
+# Generated analysis outputs (rebuild with the pipeline)
+data/processed/*.csv
+data/user/
+
+# Secrets and runtime logs
+.streamlit/secrets.toml
+*.log

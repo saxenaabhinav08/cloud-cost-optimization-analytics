@@ -1,0 +1,7 @@
+account_id,commitment_type,coverage_pct,utilization_pct,dataset_note
+synthetic-001,Savings Plan,51.4,73.6,SYNTHETIC GENERATED DATA - not from any AWS account
+synthetic-001,Reserved Instance,83.7,66.3,SYNTHETIC GENERATED DATA - not from any AWS account
+synthetic-002,Savings Plan,66.3,84.8,SYNTHETIC GENERATED DATA - not from any AWS account
+synthetic-002,Reserved Instance,72.4,67.9,SYNTHETIC GENERATED DATA - not from any AWS account
+synthetic-003,Savings Plan,82.3,82.1,SYNTHETIC GENERATED DATA - not from any AWS account
+synthetic-003,Reserved Instance,77.3,83.2,SYNTHETIC GENERATED DATA - not from any AWS account

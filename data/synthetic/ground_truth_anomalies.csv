@@ -1,0 +1,46 @@
+billing_date,account_id,service,region,scenario,cause,dataset_note
+2025-08-12,synthetic-002,NAT Gateway,us-east-1,runaway_nat_gateway,Runaway NAT Gateway processing from a synthetic test batch,SYNTHETIC GENERATED DATA - not from any AWS account
+2025-08-13,synthetic-002,NAT Gateway,us-east-1,runaway_nat_gateway,Runaway NAT Gateway processing from a synthetic test batch,SYNTHETIC GENERATED DATA - not from any AWS account
+2025-08-14,synthetic-002,NAT Gateway,us-east-1,runaway_nat_gateway,Runaway NAT Gateway processing from a synthetic test batch,SYNTHETIC GENERATED DATA - not from any AWS account
+2025-08-15,synthetic-002,NAT Gateway,us-east-1,runaway_nat_gateway,Runaway NAT Gateway processing from a synthetic test batch,SYNTHETIC GENERATED DATA - not from any AWS account
+2025-08-16,synthetic-002,NAT Gateway,us-east-1,runaway_nat_gateway,Runaway NAT Gateway processing from a synthetic test batch,SYNTHETIC GENERATED DATA - not from any AWS account
+2025-08-17,synthetic-002,NAT Gateway,us-east-1,runaway_nat_gateway,Runaway NAT Gateway processing from a synthetic test batch,SYNTHETIC GENERATED DATA - not from any AWS account
+2025-08-18,synthetic-002,NAT Gateway,us-east-1,runaway_nat_gateway,Runaway NAT Gateway processing from a synthetic test batch,SYNTHETIC GENERATED DATA - not from any AWS account
+2025-08-19,synthetic-002,NAT Gateway,us-east-1,runaway_nat_gateway,Runaway NAT Gateway processing from a synthetic test batch,SYNTHETIC GENERATED DATA - not from any AWS account
+2025-08-20,synthetic-002,NAT Gateway,us-east-1,runaway_nat_gateway,Runaway NAT Gateway processing from a synthetic test batch,SYNTHETIC GENERATED DATA - not from any AWS account
+2025-04-20,synthetic-001,Data Transfer,us-east-1,data_transfer_burst,Synthetic cross-region data backfill,SYNTHETIC GENERATED DATA - not from any AWS account
+2025-04-21,synthetic-001,Data Transfer,us-east-1,data_transfer_burst,Synthetic cross-region data backfill,SYNTHETIC GENERATED DATA - not from any AWS account
+2025-04-22,synthetic-001,Data Transfer,us-east-1,data_transfer_burst,Synthetic cross-region data backfill,SYNTHETIC GENERATED DATA - not from any AWS account
+2025-04-23,synthetic-001,Data Transfer,us-east-1,data_transfer_burst,Synthetic cross-region data backfill,SYNTHETIC GENERATED DATA - not from any AWS account
+2025-11-03,synthetic-003,Amazon EC2,eu-west-1,oversized_dev_cluster,Synthetic oversized development cluster rollout,SYNTHETIC GENERATED DATA - not from any AWS account
+2025-11-04,synthetic-003,Amazon EC2,eu-west-1,oversized_dev_cluster,Synthetic oversized development cluster rollout,SYNTHETIC GENERATED DATA - not from any AWS account
+2025-11-05,synthetic-003,Amazon EC2,eu-west-1,oversized_dev_cluster,Synthetic oversized development cluster rollout,SYNTHETIC GENERATED DATA - not from any AWS account
+2025-11-06,synthetic-003,Amazon EC2,eu-west-1,oversized_dev_cluster,Synthetic oversized development cluster rollout,SYNTHETIC GENERATED DATA - not from any AWS account
+2025-11-07,synthetic-003,Amazon EC2,eu-west-1,oversized_dev_cluster,Synthetic oversized development cluster rollout,SYNTHETIC GENERATED DATA - not from any AWS account
+2025-11-08,synthetic-003,Amazon EC2,eu-west-1,oversized_dev_cluster,Synthetic oversized development cluster rollout,SYNTHETIC GENERATED DATA - not from any AWS account
+2025-11-09,synthetic-003,Amazon EC2,eu-west-1,oversized_dev_cluster,Synthetic oversized development cluster rollout,SYNTHETIC GENERATED DATA - not from any AWS account
+2025-03-13,synthetic-002,Amazon RDS,us-east-1,unused_rds_capacity,Synthetic oversized RDS test instance left running,SYNTHETIC GENERATED DATA - not from any AWS account
+2025-03-14,synthetic-002,Amazon RDS,us-east-1,unused_rds_capacity,Synthetic oversized RDS test instance left running,SYNTHETIC GENERATED DATA - not from any AWS account
+2025-03-15,synthetic-002,Amazon RDS,us-east-1,unused_rds_capacity,Synthetic oversized RDS test instance left running,SYNTHETIC GENERATED DATA - not from any AWS account
+2025-03-16,synthetic-002,Amazon RDS,us-east-1,unused_rds_capacity,Synthetic oversized RDS test instance left running,SYNTHETIC GENERATED DATA - not from any AWS account
+2025-03-17,synthetic-002,Amazon RDS,us-east-1,unused_rds_capacity,Synthetic oversized RDS test instance left running,SYNTHETIC GENERATED DATA - not from any AWS account
+2025-06-07,synthetic-001,Amazon CloudWatch,us-west-2,log_ingestion_burst,Synthetic debug logging increased ingestion volume,SYNTHETIC GENERATED DATA - not from any AWS account
+2025-06-08,synthetic-001,Amazon CloudWatch,us-west-2,log_ingestion_burst,Synthetic debug logging increased ingestion volume,SYNTHETIC GENERATED DATA - not from any AWS account
+2025-06-09,synthetic-001,Amazon CloudWatch,us-west-2,log_ingestion_burst,Synthetic debug logging increased ingestion volume,SYNTHETIC GENERATED DATA - not from any AWS account
+2025-06-10,synthetic-001,Amazon CloudWatch,us-west-2,log_ingestion_burst,Synthetic debug logging increased ingestion volume,SYNTHETIC GENERATED DATA - not from any AWS account
+2025-07-22,synthetic-003,Amazon DynamoDB,ap-southeast-1,dynamodb_capacity_spike,Synthetic provisioned capacity test overshot demand,SYNTHETIC GENERATED DATA - not from any AWS account
+2025-07-23,synthetic-003,Amazon DynamoDB,ap-southeast-1,dynamodb_capacity_spike,Synthetic provisioned capacity test overshot demand,SYNTHETIC GENERATED DATA - not from any AWS account
+2025-07-24,synthetic-003,Amazon DynamoDB,ap-southeast-1,dynamodb_capacity_spike,Synthetic provisioned capacity test overshot demand,SYNTHETIC GENERATED DATA - not from any AWS account
+2025-07-25,synthetic-003,Amazon DynamoDB,ap-southeast-1,dynamodb_capacity_spike,Synthetic provisioned capacity test overshot demand,SYNTHETIC GENERATED DATA - not from any AWS account
+2025-07-26,synthetic-003,Amazon DynamoDB,ap-southeast-1,dynamodb_capacity_spike,Synthetic provisioned capacity test overshot demand,SYNTHETIC GENERATED DATA - not from any AWS account
+2025-07-27,synthetic-003,Amazon DynamoDB,ap-southeast-1,dynamodb_capacity_spike,Synthetic provisioned capacity test overshot demand,SYNTHETIC GENERATED DATA - not from any AWS account
+2025-05-18,synthetic-001,Amazon EKS,ap-southeast-1,eks_worker_rollout,Synthetic temporary worker-node rollout,SYNTHETIC GENERATED DATA - not from any AWS account
+2025-05-19,synthetic-001,Amazon EKS,ap-southeast-1,eks_worker_rollout,Synthetic temporary worker-node rollout,SYNTHETIC GENERATED DATA - not from any AWS account
+2025-05-20,synthetic-001,Amazon EKS,ap-southeast-1,eks_worker_rollout,Synthetic temporary worker-node rollout,SYNTHETIC GENERATED DATA - not from any AWS account
+2025-05-21,synthetic-001,Amazon EKS,ap-southeast-1,eks_worker_rollout,Synthetic temporary worker-node rollout,SYNTHETIC GENERATED DATA - not from any AWS account
+2025-05-22,synthetic-001,Amazon EKS,ap-southeast-1,eks_worker_rollout,Synthetic temporary worker-node rollout,SYNTHETIC GENERATED DATA - not from any AWS account
+2025-10-09,synthetic-002,Amazon CloudFront,ap-southeast-1,cloudfront_transfer_burst,Synthetic release generated elevated CDN requests,SYNTHETIC GENERATED DATA - not from any AWS account
+2025-10-10,synthetic-002,Amazon CloudFront,ap-southeast-1,cloudfront_transfer_burst,Synthetic release generated elevated CDN requests,SYNTHETIC GENERATED DATA - not from any AWS account
+2025-10-11,synthetic-002,Amazon CloudFront,ap-southeast-1,cloudfront_transfer_burst,Synthetic release generated elevated CDN requests,SYNTHETIC GENERATED DATA - not from any AWS account
+2025-10-12,synthetic-002,Amazon CloudFront,ap-southeast-1,cloudfront_transfer_burst,Synthetic release generated elevated CDN requests,SYNTHETIC GENERATED DATA - not from any AWS account
+2025-10-13,synthetic-002,Amazon CloudFront,ap-southeast-1,cloudfront_transfer_burst,Synthetic release generated elevated CDN requests,SYNTHETIC GENERATED DATA - not from any AWS account
